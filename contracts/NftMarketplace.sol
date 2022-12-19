@@ -9,6 +9,12 @@ error NftMarketplace__PriceMustBeAboveZero();
 error NftMarketplace__NotApprovedForListing();
 error NftMarketplace__AlreadyListed(address nftAddress, uint256 tokenId);
 error NftMarketplace__NotOwner();
+error NftMarketplace__notListed();
+error NftMarketplace__PriceNotmet(
+    address nftAddress,
+    uint256 tokenId,
+    uint256 price
+);
 
 contract NftMarketplace {
     // Declare variables
@@ -17,11 +23,20 @@ contract NftMarketplace {
         address seller;
     }
 
-    mapping(address => mapping(uint256 => Listing)) s_listings;
+    mapping(address => mapping(uint256 => Listing)) private s_listings;
+
+    mapping(address => uint256) private s_proceeds;
 
     // Event
     event ItemListed(
         address indexed seller,
+        address indexed nftAddress,
+        uint256 indexed tokenId,
+        uint256 price
+    );
+
+    event ItemBought(
+        address indexed buyer,
         address indexed nftAddress,
         uint256 indexed tokenId,
         uint256 price
@@ -46,6 +61,14 @@ contract NftMarketplace {
         _;
     }
 
+    // must be listed
+    modifier isListed(address nftAddress, uint256 tokenId) {
+        if (s_listings[nftAddress][tokenId].price <= 0) {
+            revert NftMarketplace__notListed();
+        }
+        _;
+    }
+
     /** Constructor */
     constructor() {}
 
@@ -55,7 +78,7 @@ contract NftMarketplace {
      * @notice Method for listing nft on the marketplace
      * @param nftAddress: address of the NFT
      * @param tokenId: token id of the NFT
-     * @param price: price to sell
+     * @param price: price to sell; must be positive
      * @dev this function only make approval for the `NftMarketplace` contract
      */
     function listItem(
@@ -78,5 +101,31 @@ contract NftMarketplace {
 
         s_listings[nftAddress][tokenId] = Listing(price, msg.sender);
         emit ItemListed(msg.sender, nftAddress, tokenId, price);
+    }
+
+    function buyItem(
+        address nftAddress,
+        uint256 tokenId
+    ) external payable isListed(nftAddress, tokenId) {
+        Listing memory listedItem = s_listings[nftAddress][tokenId];
+        if (msg.value < listedItem.price) {
+            revert NftMarketplace__PriceNotmet(
+                nftAddress,
+                tokenId,
+                listedItem.price
+            );
+        }
+
+        s_proceeds[listedItem.seller] =
+            s_proceeds[listedItem.seller] +
+            msg.value;
+        delete s_listings[nftAddress][tokenId];
+        IERC721(nftAddress).safeTransferFrom(
+            listedItem.seller,
+            msg.sender,
+            tokenId
+        );
+
+        emit ItemBought(msg.sender, nftAddress, tokenId, msg.value)
     }
 }
