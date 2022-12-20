@@ -1,6 +1,6 @@
 {
-    "solidity-va.outline.enable": false,
-    "solidity-va.outline.decorations": false,
+    "solidity-va.outline.enable": true,
+    "solidity-va.outline.decorations": true,
     "solidity-va.tools.surya.option.negModifiers": true,
     "solidity-va.hover": true
 }
